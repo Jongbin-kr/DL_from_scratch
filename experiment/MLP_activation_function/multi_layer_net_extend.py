@@ -16,6 +16,8 @@ class Step:
         return y.astype(int)
     
     def backward(self, dout):
+        # dx = dout * 0
+        # return dx
         return 0
 
 class Leaky:
@@ -29,7 +31,9 @@ class Leaky:
             
     def backward(self, dout):
         dx = np.ones_like(self.out)
-        dx[dx < 0] = 0.01
+        dx[self.out < 0] = 0.01
+        dx = dout * dx
+        
         return dx
 
 
@@ -192,11 +196,13 @@ class MultiLayerNetExtend:
         # backward
         dout = 1
         dout = self.last_layer.backward(dout)
+        # print('last layer dout:', np.max(dout), np.min(dout), np.average(dout))
 
         layers = list(self.layers.values())
         layers.reverse()
         for layer in layers:
             dout = layer.backward(dout)
+            # print(f'\r{layer} dout: {np.max(dout)}, {np.min(dout)}, {np.average(dout)}')
 
         # 결과 저장
         grads = {}
