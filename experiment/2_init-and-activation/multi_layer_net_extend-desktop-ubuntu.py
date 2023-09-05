@@ -139,6 +139,9 @@ class MultiLayerNetExtend:
                 scale = np.sqrt(2.0 / all_size_list[idx - 1])  # ReLUを使う場合に推奨される初期値
             elif str(weight_init_std).lower() in ('sigmoid', 'xavier'):
                 scale = np.sqrt(1.0 / all_size_list[idx - 1])  # sigmoidを使う場合に推奨される初期値
+            elif str(weight_init_std).lower() in ('he4'):
+                scale = np.sqrt(4.0 / all_size_list[idx - 1])  # sigmoidを使う場合に推奨される初期値
+
             self.params['W' + str(idx)] = scale * np.random.randn(all_size_list[idx-1], all_size_list[idx])
             self.params['b' + str(idx)] = np.zeros(all_size_list[idx])
 
