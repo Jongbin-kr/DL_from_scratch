@@ -1,5 +1,7 @@
 import numpy as np
 from numba import jit, njit
+import sys
+
 ## My own functions
 ## 228 µs ± 22 µs per loop (mean ± std. dev. of 7 runs, 10,000 loops each)
 def step_function(x):
@@ -47,7 +49,7 @@ def cross_entropy_error(y: np.ndarray, t: np.ndarray) -> np.ndarray:
 
 
 def numerical_gradient(f, x):
-    h = 1e-4
+    h = sys.float_info.epsilon
     grads = np.zeros_like(x)
     # print('x.size', x.size, 'x.shape', x.shape)
     iter = np.nditer(x, flags=['multi_index'], op_flags=['readwrite'])
