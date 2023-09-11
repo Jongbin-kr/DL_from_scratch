@@ -1,0 +1,74 @@
+from my_functions import *
+
+class ReLU():
+    def __init__(self) -> None:
+        pass
+    
+    def forward(self, x):
+        out = relu(x)
+        self.out = out
+        return out
+    
+    def backward(self, dout):
+        dout[self.out <= 0] = 0
+        dx = dout
+        return dx
+    
+    
+    
+class Sigmoid():
+    def __init__(self) -> None:
+        pass
+    
+    def forward(self, x):
+        out = sigmoid(x)
+        self.out = out
+        return out
+    
+    def backward(self, dout):
+        dx = self.out * (1 - self.out) * dout
+        return dx
+
+
+
+class Affine():
+    def __init__(self, W, b):
+        self.W = W
+        self.b = b
+    
+    def forward(self, x):
+        self.x = x
+        # self.out = out
+        out = x @ self.W + self.b
+        return out
+    
+    def backward(self, dout):
+        dx = dout @ self.W.T
+        self.dW = self.x.T @ dout
+        self.db = np.sum(dout, axis=0)
+        return dx
+        
+        
+class SoftmaxWithLoss():
+    def __init__(self):
+        pass
+    
+    def forward(self, x, t):
+        self.t = t
+        self.y = softmax(x)   ## softmax
+        loss = cross_entropy_error(self.y, self.t)
+        return loss
+    
+    def backward(self, dout):
+        batch_size = self.t.shape[0]
+        
+        if self.t.size == self.y.size:
+            dx = (self.y - self.t) / batch_size
+        else:
+            dx = self.y.copy()
+            dx[np.arange(batch_size), self.t] = 0
+            dx = dx / batch_size
+        return dx
+    
+        
+    
