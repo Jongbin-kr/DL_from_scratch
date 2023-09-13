@@ -36,6 +36,8 @@ def softmax(x):
 def sum_squares_error(y: np.ndarray, t: np.ndarray) -> np.ndarray:
     return 0.5 * np.sum((y - t)**2)
 
+
+
 def cross_entropy_error(y: np.ndarray, t: np.ndarray) -> np.ndarray:
     if y.ndim == 1:  ## if it is NOT batch
         y = y.reshape(1, y.size)
@@ -45,11 +47,15 @@ def cross_entropy_error(y: np.ndarray, t: np.ndarray) -> np.ndarray:
         t = t.argmax(axis=1)
         
     batch_size = y.shape[0]
-    return -np.sum(t * np.log(y[np.arange(batch_size), t])) / batch_size
+    return -np.sum(np.log(y[np.arange(batch_size), t])) / batch_size
 
 
+
+
+## gradient
 def numerical_gradient(f, x):
-    h = sys.float_info.epsilon
+    h = 2 * sys.float_info.epsilon
+    # h = 1e-4
     grads = np.zeros_like(x)
     # print('x.size', x.size, 'x.shape', x.shape)
     iter = np.nditer(x, flags=['multi_index'], op_flags=['readwrite'])
@@ -59,10 +65,16 @@ def numerical_gradient(f, x):
         original_x = x[idx]
         
         x[idx] = float(original_x) + h
+        print(x[idx])
+        print(x[idx] == original_x)
         fxh1 = f(x)
+        print(fxh1)
         
         x[idx] = float(original_x) - h
+        print(x[idx])
+        print(x[idx] == original_x)
         fxh2 = f(x)
+        print(fxh2)
         
         grads[idx] = (fxh1 - fxh2) / (2*h)
         x[idx] = original_x

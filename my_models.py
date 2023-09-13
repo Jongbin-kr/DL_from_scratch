@@ -82,7 +82,6 @@ class TwoLayerNet():
     
 def batch_mask_loader(data: np.ndarray, batch_size=100) -> np.ndarray:
     batch_indexes= np.arange(len(data))
-    np.random.seed()
     np.random.shuffle(batch_indexes)
     while batch_indexes.any():
         batch_indexes = batch_indexes[batch_size:]
