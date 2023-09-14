@@ -8,27 +8,48 @@ from my_layers import *
 
 
 class TwoLayerNet():
-    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01) -> None:
+    def __init__(self, input_size, hidden_size_list, output_size, weight_init_std=0.01, activation='relu') -> None:
         
-        self.params = {}
-        self.params['W1'] = weight_init_std * np.random.randn(input_size, hidden_size)
-        self.params['b1'] = np.zeros(hidden_size)
-        self.params['W2'] = weight_init_std * np.random.randn(hidden_size, output_size)
-        self.params['b2'] = np.zeros(output_size)
+        self.input_size = input_size
+        self.hidden_size_list = hidden_size_list
+        self.output_size = output_size
         
         self.layers = OrderedDict()
-        self.layers['Affine1'] = Affine(self.params['W1'], self.params['b1'])
-        self.layers['Relu1'] = ReLU()
-        self.layers['Affine2'] = Affine(self.params['W2'], self.params['b2'])
-        # self.layers['Relu2'] = ReLU()
+        self.params = {}
         
+        self.__init_weight(weight_init_std)
+        
+        
+        activation_layers = {'sigmoid': Sigmoid, 'relu': ReLU, }
+        for idx in range(1, len(hidden_size_list)+1):
+            self.layers[f'Affine{idx}'] = Affine(self.params[f'W{idx}'], self.params[f'b{idx}'])
+            self.layers[f'Activation{idx}'] = activation_layers[activation]()
+            # print(f'Affine{idx} and Activation{idx} created')
+        self.layers[f'Affine{idx+1}'] = Affine(self.params[f'W{idx+1}'], self.params[f'b{idx+1}'])
         self.last_layer = SoftmaxWithLoss()
     
-        
+    
+    
+    def __init_weight(self, weight_init_std):
+        all_size_list = [self.input_size] + self.hidden_size_list + [self.output_size]
+        for idx in range(1, len(all_size_list)):
+            if str(weight_init_std).lower() in ('relu', 'he'):
+                scale = np.sqrt(2.0 / all_size_list[idx - 1])
+            elif str(weight_init_std).lower() in ('sigmoid', 'tanh', 'xavier'):
+                scale = np.sqrt(1.0 / all_size_list[idx - 1])
+            else:
+                scale = weight_init_std
+            self.params[f'W{idx}'] = scale * np.random.randn(all_size_list[idx - 1], all_size_list[idx])
+            self.params[f'b{idx}'] = np.zeros(all_size_list[idx])
+            
+    
+    
     def predict(self, x):
-        for layer in self.layers.values():
+        for key, layer in self.layers.items():
+            # print(f'layer name: {key}')
             x = layer.forward(x)
         return x
+    
     
     
     def loss(self, x, t):
@@ -36,6 +57,7 @@ class TwoLayerNet():
 
         loss = self.last_layer.forward(y, t)
         return loss
+    
     
     
     def accuracy(self, x, t):
@@ -47,16 +69,16 @@ class TwoLayerNet():
         return accuracy
     
     
-    def numerical_gradient(self, x, t):
-        loss_W = lambda W: self.loss(x, t)
+    # def numerical_gradient(self, x, t):
+    #     loss_W = lambda W: self.loss(x, t)
         
-        grads = {}
-        grads['W1'] = numerical_gradient(loss_W, self.params['W1'])
-        grads['b1'] = numerical_gradient(loss_W, self.params['b1'])
-        grads['W2'] = numerical_gradient(loss_W, self.params['W2'])
-        grads['b2'] = numerical_gradient(loss_W, self.params['b2'])
+    #     grads = {}
+    #     grads['W1'] = numerical_gradient(loss_W, self.params['W1'])
+    #     grads['b1'] = numerical_gradient(loss_W, self.params['b1'])
+    #     grads['W2'] = numerical_gradient(loss_W, self.params['W2'])
+    #     grads['b2'] = numerical_gradient(loss_W, self.params['b2'])
         
-        return grads
+    #     return grads
     
     
     def gradient(self, x, t):
@@ -89,3 +111,100 @@ def batch_mask_loader(data: np.ndarray, batch_size=100) -> np.ndarray:
         batch_mask = batch_indexes[:batch_size]
         # print(batch)
         yield batch_mask
+
+
+
+## optimizers
+class SGD:
+    def __init__(self, lr=0.01):
+        self.lr = lr
+    
+    def update(self, params, grads):
+        for key in params.keys():
+            params[key] -= self.lr * grads[key]
+            
+            
+            
+class Momentum():
+    def __init__(self, lr=0.01, momentum=0.9) -> None:
+        self.lr = lr
+        self.v = None
+        self.momentum = momentum
+        
+    def update(self, params, grads):
+        if self.v == None:
+            self.v = {}
+            for key, val in params.items():
+                self.v[key] = np.zeros_like(val)
+                
+        for key in params.keys():
+            self.v[key] = (self.momentum * self.v[key]) - (self.lr * grads[key])
+            params[key] += self.v[key]
+            
+
+
+class AdaGrad:
+    def __init__(self, lr=0.01):
+        self.lr = lr
+        self.h = None
+    
+    def update(self, params, grads):
+        if self.h == None:
+            self.h = {}
+            for key, val in params.items():
+                self.h[key] = np.zeros_like(val)
+        
+        for key in params.keys():
+            self.h[key] += grads[key]**2
+            
+            update_value = self.lr / (np.sqrt(self.h[key]) + 1e-7) * grads[key]
+            params[key] -= update_value
+            
+            
+            
+class RMSProp:
+    def __init__(self, lr=0.01, decay_rate=0.99):
+        self.lr = lr
+        self.h = None
+        self.decay_rate = decay_rate
+    
+    def update(self, params, grads):
+        if self.h is None:
+            self.h = {}
+            for key, val in params.items():
+                self.h[key] = np.zeros_like(val)
+        
+        for key in params.keys():
+            self.h[key] *= self.decay_rate
+            self.h[key] += (1-self.decay_rate) * grads[key] * grads[key]
+            
+            update_value = self.lr * grads[key] / (np.sqrt(self.h[key]) + 1e-7)
+            params[key] -= update_value
+            
+            
+            
+class Adam():
+    def __init__(self, lr=0.001, beta1=0.9, beta2=0.999) -> None:
+        self.lr = lr
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.m = None
+        self.v = None
+        self.iter = 1
+    
+    def update(self, params, grads):
+        if self.m is None:
+            self.m, self.v = {}, {}
+            for key, val in params.items():
+                self.m[key] = np.zeros_like(val)
+                self.v[key] = np.zeros_like(val)
+        
+        for key in params.keys():        
+            self.m[key] = self.beta1 * self.m[key] + ((1.0 - self.beta1) * grads[key]) 
+            # self.m[key] /= (1.0 - self.beta1**self.iter)
+            self.v[key] = self.beta2 * self.v[key] + ((1.0 - self.beta2) * grads[key]**2) 
+            # self.v[key] /= np.sqrt(1.0 - self.beta2**self.iter)
+            
+            params[key] -= self.lr * np.sqrt(1.0 - self.beta2**self.iter) / (1.0 - self.beta1**self.iter) * self.m[key] / (np.sqrt(self.v[key]) + 1e-7) 
+        
+        self.iter += 1

@@ -39,6 +39,7 @@ class Affine():
     def forward(self, x):
         self.x = x
         # self.out = out
+        # print(f'x shape: {x.shape}, w shape: {self.W.shape}')
         out = x @ self.W + self.b
         return out
     
