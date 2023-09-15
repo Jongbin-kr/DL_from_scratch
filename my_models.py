@@ -7,24 +7,29 @@ from my_layers import *
 
 
 
-class TwoLayerNet():
-    def __init__(self, input_size, hidden_size_list, output_size, weight_init_std=0.01, activation='relu') -> None:
+class MultiLayerNet():
+    def __init__(self, input_size, hidden_size_list, output_size, 
+                 weight_init_std='relu', activation='relu', 
+                 weight_decay_method='pass', weight_decay_lambda=0) -> None:
         
         self.input_size = input_size
         self.hidden_size_list = hidden_size_list
         self.output_size = output_size
         
-        self.layers = OrderedDict()
-        self.params = {}
+        self.weight_decay_method = weight_decay_method
+        self.weight_decay_lambda = weight_decay_lambda
         
+        self.params = {}
         self.__init_weight(weight_init_std)
         
         
         activation_layers = {'sigmoid': Sigmoid, 'relu': ReLU, }
+        self.layers = OrderedDict()
         for idx in range(1, len(hidden_size_list)+1):
             self.layers[f'Affine{idx}'] = Affine(self.params[f'W{idx}'], self.params[f'b{idx}'])
             self.layers[f'Activation{idx}'] = activation_layers[activation]()
             # print(f'Affine{idx} and Activation{idx} created')
+        
         self.layers[f'Affine{idx+1}'] = Affine(self.params[f'W{idx+1}'], self.params[f'b{idx+1}'])
         self.last_layer = SoftmaxWithLoss()
     
@@ -54,9 +59,20 @@ class TwoLayerNet():
     
     def loss(self, x, t):
         y = self.predict(x)
-
+        
+        weight_decay = 0
+        if self.weight_decay_method == 'L2':
+            for idx in range(1, len(self.hidden_size_list)+2):
+                W = self.params[f'W{idx}']
+                weight_decay += 0.5 * self.weight_decay_lambda * np.sum(W**2)
+        
+        elif self.weight_decay_method == 'L1':
+            for idx in range(1, len(self.hidden_size_list)+2):
+                W = self.params[f'W{idx}']
+                weight_decay += 0.5 * self.weight_decay_lambda * np.sum(np.abs(W))
+                
         loss = self.last_layer.forward(y, t)
-        return loss
+        return loss + weight_decay
     
     
     
@@ -93,10 +109,26 @@ class TwoLayerNet():
             dout = layer.backward(dout)
             
         grads = {}
-        grads['W1'] = self.layers['Affine1'].dW
-        grads['b1'] = self.layers['Affine1'].db
-        grads['W2'] = self.layers['Affine2'].dW
-        grads['b2'] = self.layers['Affine2'].db
+        for idx in range(1, len(self.hidden_size_list)+2):
+            if self.weight_decay_method in ('L2', 'pass'):
+                grads[f'W{idx}'] = self.layers[f'Affine{idx}'].dW + (self.weight_decay_lambda * self.params[f'W{idx}'])
+                
+            elif self.weight_decay_method == 'L1':
+                # abs_gradient = np.zeros_like(self.params[f'W{idx}'])
+                # it = np.nditer(self.params[f'W{idx}'], flags=['multi_index'])
+                # while not it.finished:
+                #     multi_idx = it.multi_index
+                #     abs_gradient[multi_idx] = (1 if self.params[f'W{idx}'][multi_idx] > 0 else -1)
+                #     it.iternext()
+                positive_mask = self.params[f'W{idx}'] > 0
+                negative_mask = self.params[f'W{idx}'] <= 0
+                abs_gradient = np.ones_like(self.params[f'W{idx}'])
+                abs_gradient[positive_mask] = self.weight_decay_lambda
+                abs_gradient[negative_mask] = -self.weight_decay_lambda
+                    
+                grads[f'W{idx}'] = self.layers[f'Affine{idx}'].dW + 0.5 * self.weight_decay_lambda * abs_gradient
+            
+            grads[f'b{idx}'] = self.layers[f'Affine{idx}'].db
         
         return grads
     

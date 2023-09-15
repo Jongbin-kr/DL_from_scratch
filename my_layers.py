@@ -72,4 +72,20 @@ class SoftmaxWithLoss():
         return dx
     
         
+
+class BatchNormalization():
+    def __init__(self) -> None:
+        self.running_mean = None
+        self.running_var = None
     
+    def forward(self, x):
+        x -= np.average(x)
+        x /= np.sqrt(np.var(x) + 1e7)
+        
+        if self.running_mean is None:
+            # self.running_mean = 
+            pass
+        return x
+    
+    def backward(self, dout):
+        pass
