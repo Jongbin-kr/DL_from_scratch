@@ -54,7 +54,8 @@ def cross_entropy_error(y: np.ndarray, t: np.ndarray) -> np.ndarray:
 
 ## gradient
 def numerical_gradient(f, x):
-    h = 2 * sys.float_info.epsilon
+    # h = 1 * np.finfo(np.float32).eps
+    h = 1 * sys.float_info.epsilon
     # h = 1e-4
     grads = np.zeros_like(x)
     # print('x.size', x.size, 'x.shape', x.shape)
@@ -65,16 +66,16 @@ def numerical_gradient(f, x):
         original_x = x[idx]
         
         x[idx] = float(original_x) + h
-        print(x[idx])
+        # print(x[idx])
         print(x[idx] == original_x)
         fxh1 = f(x)
-        print(fxh1)
+        # print(fxh1)
         
         x[idx] = float(original_x) - h
-        print(x[idx])
+        # print(x[idx])
         print(x[idx] == original_x)
         fxh2 = f(x)
-        print(fxh2)
+        # print(fxh2)
         
         grads[idx] = (fxh1 - fxh2) / (2*h)
         x[idx] = original_x

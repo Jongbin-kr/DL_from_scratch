@@ -10,7 +10,8 @@ from my_layers import *
 class MultiLayerNet():
     def __init__(self, input_size, hidden_size_list, output_size, 
                  weight_init_std='relu', activation='relu', 
-                 weight_decay_method='pass', weight_decay_lambda=0) -> None:
+                 weight_decay_method='pass', weight_decay_lambda=0,
+                 dropout=False, dropout_ratio=0.1) -> None:
         
         self.input_size = input_size
         self.hidden_size_list = hidden_size_list
@@ -25,11 +26,13 @@ class MultiLayerNet():
         
         activation_layers = {'sigmoid': Sigmoid, 'relu': ReLU, }
         self.layers = OrderedDict()
-        for idx in range(1, len(hidden_size_list)+1):
+        for idx in range(1, len(self.hidden_size_list)+1):
             self.layers[f'Affine{idx}'] = Affine(self.params[f'W{idx}'], self.params[f'b{idx}'])
             self.layers[f'Activation{idx}'] = activation_layers[activation]()
             # print(f'Affine{idx} and Activation{idx} created')
-        
+
+            if dropout:
+                self.layers[f'Dropout{idx}'] = Dropout(dropout_ratio=dropout_ratio)
         self.layers[f'Affine{idx+1}'] = Affine(self.params[f'W{idx+1}'], self.params[f'b{idx+1}'])
         self.last_layer = SoftmaxWithLoss()
     
@@ -49,16 +52,19 @@ class MultiLayerNet():
             
     
     
-    def predict(self, x):
+    def predict(self, x, train_flag=False):
         for key, layer in self.layers.items():
+            if ('Dropout' in key) or ('BatchNorm' in key):
+                x = layer.forward(x, train_flag)
             # print(f'layer name: {key}')
-            x = layer.forward(x)
+            else:
+                x = layer.forward(x)
         return x
     
     
     
-    def loss(self, x, t):
-        y = self.predict(x)
+    def loss(self, x, t, train_flag=False):
+        y = self.predict(x, train_flag=train_flag)
         
         weight_decay = 0
         if self.weight_decay_method == 'L2':
@@ -71,13 +77,14 @@ class MultiLayerNet():
                 W = self.params[f'W{idx}']
                 weight_decay += 0.5 * self.weight_decay_lambda * np.sum(np.abs(W))
                 
+                
         loss = self.last_layer.forward(y, t)
         return loss + weight_decay
     
     
     
     def accuracy(self, x, t):
-        y = self.predict(x)
+        y = self.predict(x, train_flag=False)
         y = np.argmax(y, axis=1)
         if t.ndim != 1:     ## 원-핫 라벨인 경우, 다시 1열짜리 매트릭스로 전환.
             t = np.argmax(t, axis=1)
@@ -99,10 +106,11 @@ class MultiLayerNet():
     
     def gradient(self, x, t):
         
-        self.loss(x, t)
+        self.loss(x, t, train_flag=True)
         
         dout = 1
         dout = self.last_layer.backward(dout)
+        
         reversed_layers = reversed(self.layers.values())
         for layer in reversed_layers:
             # print(layer)
@@ -120,12 +128,10 @@ class MultiLayerNet():
                 #     multi_idx = it.multi_index
                 #     abs_gradient[multi_idx] = (1 if self.params[f'W{idx}'][multi_idx] > 0 else -1)
                 #     it.iternext()
-                positive_mask = self.params[f'W{idx}'] > 0
-                negative_mask = self.params[f'W{idx}'] <= 0
+                positive_mask, negative_mask = self.params[f'W{idx}'] > 0, self.params[f'W{idx}'] <= 0
                 abs_gradient = np.ones_like(self.params[f'W{idx}'])
                 abs_gradient[positive_mask] = self.weight_decay_lambda
                 abs_gradient[negative_mask] = -self.weight_decay_lambda
-                    
                 grads[f'W{idx}'] = self.layers[f'Affine{idx}'].dW + 0.5 * self.weight_decay_lambda * abs_gradient
             
             grads[f'b{idx}'] = self.layers[f'Affine{idx}'].db
@@ -133,16 +139,21 @@ class MultiLayerNet():
         return grads
     
     
+
+
+
     
-def batch_mask_loader(data: np.ndarray, batch_size=100) -> np.ndarray:
+def batch_mask_loader(data: np.ndarray, batch_size=100, shuffle=True) -> np.ndarray:
     batch_indexes= np.arange(len(data))
-    np.random.shuffle(batch_indexes)
+    if shuffle:
+        np.random.shuffle(batch_indexes)
     while batch_indexes.any():
-        batch_indexes = batch_indexes[batch_size:]
-        
         batch_mask = batch_indexes[:batch_size]
+        batch_indexes = batch_indexes[batch_size:]
         # print(batch)
         yield batch_mask
+
+
 
 
 
