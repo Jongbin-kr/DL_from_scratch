@@ -8,10 +8,14 @@ from my_layers import *
 
 
 class MultiLayerNet():
-    def __init__(self, input_size, hidden_size_list, output_size, 
+    def __init__(self, input_size, hidden_size_list, output_size,
+                 h=1e-4,
                  weight_init_std='relu', activation='relu', 
                  weight_decay_method='pass', weight_decay_lambda=0,
+                 batch_norm=False,
                  dropout=False, dropout_ratio=0.1) -> None:
+        
+        self.h = h
         
         self.input_size = input_size
         self.hidden_size_list = hidden_size_list
@@ -23,15 +27,31 @@ class MultiLayerNet():
         self.params = {}
         self.__init_weight(weight_init_std)
         
+        self.batch_norm = batch_norm
+        self.dropout = dropout
+        
         
         activation_layers = {'sigmoid': Sigmoid, 'relu': ReLU, }
         self.layers = OrderedDict()
         for idx in range(1, len(self.hidden_size_list)+1):
             self.layers[f'Affine{idx}'] = Affine(self.params[f'W{idx}'], self.params[f'b{idx}'])
+
+            if self.batch_norm == 'before':
+                self.params[f'gamma{idx}'] = np.ones(hidden_size_list[idx-1])
+                self.params[f'beta{idx}'] = np.zeros(hidden_size_list[idx-1])
+                self.layers[f'BatchNorm{idx}'] = BatchNormalization(self.params[f'gamma{idx}'], self.params[f'beta{idx}'])                        
+
+                
+                
             self.layers[f'Activation{idx}'] = activation_layers[activation]()
             # print(f'Affine{idx} and Activation{idx} created')
+            if self.batch_norm == 'after':
+                self.params[f'gamma{idx}'] = np.ones(hidden_size_list[idx-1])
+                self.params[f'beta{idx}'] = np.zeros(hidden_size_list[idx-1])
+                self.layers[f'BatchNorm{idx}'] = BatchNormalization(self.params[f'gamma{idx}'], self.params[f'beta{idx}'])            
 
-            if dropout:
+        
+            if self.dropout:
                 self.layers[f'Dropout{idx}'] = Dropout(dropout_ratio=dropout_ratio)
         self.layers[f'Affine{idx+1}'] = Affine(self.params[f'W{idx+1}'], self.params[f'b{idx+1}'])
         self.last_layer = SoftmaxWithLoss()
@@ -92,16 +112,20 @@ class MultiLayerNet():
         return accuracy
     
     
-    # def numerical_gradient(self, x, t):
-    #     loss_W = lambda W: self.loss(x, t)
+    def numerical_gradient(self, x, t, h=None):
         
-    #     grads = {}
-    #     grads['W1'] = numerical_gradient(loss_W, self.params['W1'])
-    #     grads['b1'] = numerical_gradient(loss_W, self.params['b1'])
-    #     grads['W2'] = numerical_gradient(loss_W, self.params['W2'])
-    #     grads['b2'] = numerical_gradient(loss_W, self.params['b2'])
+        if h is None:
+            h = self.h
         
-    #     return grads
+        loss_W = lambda W: self.loss(x, t)
+        
+        grads = {}
+        grads['W1'] = numerical_gradient(loss_W, self.params['W1'], h)
+        grads['b1'] = numerical_gradient(loss_W, self.params['b1'], h)
+        grads['W2'] = numerical_gradient(loss_W, self.params['W2'], h)
+        grads['b2'] = numerical_gradient(loss_W, self.params['b2'], h)
+        
+        return grads
     
     
     def gradient(self, x, t):
@@ -135,6 +159,10 @@ class MultiLayerNet():
                 grads[f'W{idx}'] = self.layers[f'Affine{idx}'].dW + 0.5 * self.weight_decay_lambda * abs_gradient
             
             grads[f'b{idx}'] = self.layers[f'Affine{idx}'].db
+            
+            if self.batch_norm and idx != len(self.hidden_size_list)+1:
+                grads['gamma' + str(idx)] = self.layers['BatchNorm' + str(idx)].dgamma
+                grads['beta' + str(idx)] = self.layers['BatchNorm' + str(idx)].dbeta            
         
         return grads
     
@@ -251,3 +279,97 @@ class Adam():
             params[key] -= self.lr * np.sqrt(1.0 - self.beta2**self.iter) / (1.0 - self.beta1**self.iter) * self.m[key] / (np.sqrt(self.v[key]) + 1e-7) 
         
         self.iter += 1
+        
+        
+        
+from collections import OrderedDict
+
+import numpy as np
+
+from my_functions import *
+from my_layers import *
+
+
+
+class TwoLayerNet():
+    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01) -> None:
+        
+        self.params = {}
+        self.params['W1'] = weight_init_std * np.random.randn(input_size, hidden_size)
+        self.params['b1'] = np.zeros(hidden_size)
+        self.params['W2'] = weight_init_std * np.random.randn(hidden_size, output_size)
+        self.params['b2'] = np.zeros(output_size)
+        
+        self.layers = OrderedDict()
+        self.layers['Affine1'] = Affine(self.params['W1'], self.params['b1'])
+        self.layers['Relu1'] = ReLU()
+        self.layers['Affine2'] = Affine(self.params['W2'], self.params['b2'])
+        # self.layers['Relu2'] = ReLU()
+        
+        self.last_layer = SoftmaxWithLoss()
+    
+        
+    def predict(self, x):
+        for layer in self.layers.values():
+            x = layer.forward(x)
+        return x
+    
+    
+    def loss(self, x, t):
+        y = self.predict(x)
+
+        loss = self.last_layer.forward(y, t)
+        return loss
+    
+    
+    def accuracy(self, x, t):
+        y = self.predict(x)
+        y = np.argmax(y, axis=1)
+        if t.ndim != 1:     ## 원-핫 라벨인 경우, 다시 1열짜리 매트릭스로 전환.
+            t = np.argmax(t, axis=1)
+        accuracy = np.sum(y == t) / float(x.shape[0])
+        return accuracy
+    
+    
+    def numerical_gradient(self, x, t):
+        loss_W = lambda W: self.loss(x, t)
+        
+        grads = {}
+        grads['W1'] = numerical_gradient(loss_W, self.params['W1'])
+        grads['b1'] = numerical_gradient(loss_W, self.params['b1'])
+        grads['W2'] = numerical_gradient(loss_W, self.params['W2'])
+        grads['b2'] = numerical_gradient(loss_W, self.params['b2'])
+        
+        return grads
+    
+    
+    def gradient(self, x, t):
+        
+        self.loss(x, t)
+        
+        dout = 1
+        dout = self.last_layer.backward(dout)
+        reversed_layers = reversed(self.layers.values())
+        for layer in reversed_layers:
+            # print(layer)
+            dout = layer.backward(dout)
+            
+        grads = {}
+        grads['W1'] = self.layers['Affine1'].dW
+        grads['b1'] = self.layers['Affine1'].db
+        grads['W2'] = self.layers['Affine2'].dW
+        grads['b2'] = self.layers['Affine2'].db
+        
+        return grads
+    
+    
+    
+def batch_mask_loader(data: np.ndarray, batch_size=100) -> np.ndarray:
+    batch_indexes= np.arange(len(data))
+    np.random.shuffle(batch_indexes)
+    while batch_indexes.any():
+        batch_indexes = batch_indexes[batch_size:]
+        
+        batch_mask = batch_indexes[:batch_size]
+        # print(batch)
+        yield batch_mask
