@@ -369,7 +369,6 @@ def batch_mask_loader(data: np.ndarray, batch_size=100) -> np.ndarray:
     np.random.shuffle(batch_indexes)
     while batch_indexes.any():
         batch_indexes = batch_indexes[batch_size:]
-        
         batch_mask = batch_indexes[:batch_size]
         # print(batch)
         yield batch_mask

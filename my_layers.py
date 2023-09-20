@@ -199,6 +199,7 @@ class BatchNormalization():
             xn = xc / std
             
             self.batch_size = x.shape[0]
+            # print(self.batch_size)
             self.xc = xc
             self.xn = xn
             self.std = std
